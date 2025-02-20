@@ -1,0 +1,14 @@
+---
+import Login from "../components/Login.svelte";
+import Register from "../components/Register.svelte";
+
+const { searchParams } = Astro.url;
+const mode = searchParams.get("mode") || "login";
+---
+
+<head>
+  <title>Dynamic Components</title>
+</head>
+<body>
+  {mode === "login" ? <Register /> : <Login />}
+</body>
