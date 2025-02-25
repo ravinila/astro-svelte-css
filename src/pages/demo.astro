@@ -1,0 +1,24 @@
+---
+import { componentMap } from "../components/ComponentMap";
+import Layout from "../layouts/Layout.astro";
+
+// Get the dynamic route parameter (e.g., "Header", "Footer", "Hero")
+const { page } = Astro.params;
+
+console.log({ param: page });
+---
+
+<Layout>
+  <h2>Rendering the {page} Component</h2>
+  <hr />
+  <!-- Dynamically render the component -->
+  <!-- Iterate over the componentMap and render each component -->
+  {
+    Object.entries(componentMap).map(([name, Component]) => (
+      <section>
+        <h4>{name} Component</h4>
+        <Component />
+      </section>
+    ))
+  }
+</Layout>
