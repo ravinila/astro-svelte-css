@@ -26,7 +26,8 @@ export const cssInjector = defineMiddleware(async (context, next) => {
 
   // Get components used for this route
   const pathname = context.url.pathname;
-  const usedComponents = ["Header"];
+
+  const usedComponents = context.locals.usedComponents || [];
   console.log(
     "[css-injector] Used components for",
     pathname,
