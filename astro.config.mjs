@@ -6,23 +6,21 @@ import path from "path";
 import fs from "fs/promises";
 import { createHash } from "crypto";
 
-// Custom Svelte preprocess to extract compiled CSS
 function extractSvelteCSS() {
-  const cssMap = new Map(); // Use Map for uniqueness
+  const cssMap = new Map();
   return {
     name: "extract-svelte-css",
     async markup({ content, filename }) {
-      console.log(`Processing ${filename}`);
+      if (!filename.includes("src/components")) return { code: content };
       const relativePath = path.relative(
         path.join(process.cwd(), "src/components"),
         filename
       );
-      // Simplify nested names: 'Footer/index.svelte' -> 'Footer'
       const componentName = relativePath
         .replace(/\.svelte$/, "")
-        .replace(/[/\\]index$/, "") // Remove '/index' from nested paths
-        .replace(/[/\\]/g, "-"); // Replace remaining separators with hyphens
-      const cssFileName = `assets/svelte/${componentName}-[hash].css`;
+        .replace(/[/\\]index$/, "")
+        .replace(/[/\\]/g, "-");
+      const cssFileName = `_astro/assets/svelte/${componentName}-[hash].css`;
 
       const { css } = await compile(content, {
         filename,
@@ -31,77 +29,75 @@ function extractSvelteCSS() {
         hydratable: true,
       });
 
-      if (css && css.code) {
+      if (css?.code) {
         const tempDir = path.join(process.cwd(), "dist/temp-svelte-css");
         await fs.mkdir(tempDir, { recursive: true });
         const tempPath = path.join(tempDir, `${componentName}.css`);
+        console.log(`[extractSvelteCSS] Writing ${tempPath}`);
         await fs.writeFile(tempPath, css.code);
-        console.log(`Wrote temp CSS for ${componentName}: ${tempPath}`);
         cssMap.set(componentName, cssFileName);
-      } else {
-        console.log(`No CSS found for ${componentName}`);
       }
 
       return { code: content };
     },
-    getCSSMap: () => Object.fromEntries(cssMap), // Convert Map to object for manifest
+    getCSSMap: () => Object.fromEntries(cssMap),
   };
 }
 
 const svelteCSSPreprocess = extractSvelteCSS();
 
-// Custom Astro integration to finalize CSS files with content-based hashing
 function svelteCSSFinalizer() {
   return {
     name: "svelte-css-finalizer",
     hooks: {
       "astro:build:done": async ({ dir }) => {
-        console.log("astro:build:done hook triggered");
-        const distDir = path.join(process.cwd(), "dist");
-        const tempDir = path.join(distDir, "temp-svelte-css");
-        const finalDir = path.join(distDir, "assets/svelte");
+        const distDir = dir.pathname.replace(/^file:\/\//, "");
+        const tempDir = path.join(process.cwd(), "dist/temp-svelte-css");
+        const finalDir = path.join(distDir, "_astro/assets/svelte");
         const cssMap = svelteCSSPreprocess.getCSSMap();
 
-        console.log("Finalizing CSS files...", {
+        console.log("[svelteCSSFinalizer] Starting", {
+          distDir,
           tempDir,
-          finalDir,
-          components: Object.keys(cssMap),
+          cssMap,
         });
 
         await fs.mkdir(finalDir, { recursive: true });
 
-        for (const component in cssMap) {
-          const cssFileTemplate = cssMap[component];
+        for (const [component, cssFileTemplate] of Object.entries(cssMap)) {
           const tempPath = path.join(tempDir, `${component}.css`);
+          console.log(`[svelteCSSFinalizer] Processing ${tempPath}`);
           try {
             const cssContent = await fs.readFile(tempPath, "utf8");
             const hash = createHash("md5")
               .update(cssContent)
               .digest("hex")
-              .slice(0, 8); // 8-char hash
+              .slice(0, 8);
             const finalPath = path.join(
               distDir,
               cssFileTemplate.replace("[hash]", hash)
             );
             await fs.mkdir(path.dirname(finalPath), { recursive: true });
             await fs.copyFile(tempPath, finalPath);
-            cssMap[component] = finalPath.replace(distDir + "/", ""); // Relative path for manifest
-            console.log(`Finalized CSS: ${finalPath} (hash: ${hash})`);
+            cssMap[component] = `/${finalPath
+              .replace(distDir, "")
+              .replace(/\\/g, "/")}`;
           } catch (err) {
-            console.warn(`Failed to process ${tempPath}: ${err.message}`);
+            console.error(
+              `[svelteCSSFinalizer] Error processing ${tempPath}: ${err.message}`
+            );
           }
         }
 
         const manifestPath = path.join(distDir, "css-manifest.json");
         await fs.writeFile(manifestPath, JSON.stringify(cssMap, null, 2));
-        console.log("CSS manifest written:", cssMap);
+        console.log(`[svelteCSSFinalizer] Manifest written: ${manifestPath}`);
 
-        try {
-          await fs.rm(tempDir, { recursive: true, force: true });
-          console.log("Cleaned up temp directory");
-        } catch (err) {
-          console.warn(`Failed to clean up temp directory: ${err.message}`);
-        }
+        await fs
+          .rm(tempDir, { recursive: true, force: true })
+          .catch((err) =>
+            console.warn(`[svelteCSSFinalizer] Cleanup failed: ${err.message}`)
+          );
       },
     },
   };
@@ -119,29 +115,18 @@ export default defineConfig({
       cssCodeSplit: true,
       rollupOptions: {
         output: {
-          assetFileNames: (assetInfo) => {
-            if (assetInfo.name && assetInfo.name.endsWith(".svelte.css")) {
-              const componentName = assetInfo.name.replace(".svelte.css", "");
-              return `assets/svelte/${componentName}-[hash].css`;
-            }
-            return "assets/[name]-[hash][extname]";
-          },
+          assetFileNames: "assets/[name]-[hash][extname]",
         },
       },
-      assetsInclude: ["**/*.svelte.css"],
     },
     css: {
-      extract: true,
+      extract: false,
     },
     ssr: {
       noExternal: ["svelte"],
     },
   },
   output: "server",
-  server: {
-    port: 5000,
-  },
-  adapter: node({
-    mode: "standalone",
-  }),
+  server: { port: 5000 },
+  adapter: node({ mode: "middleware" }),
 });
