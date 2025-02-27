@@ -1,15 +1,35 @@
 import { defineMiddleware } from "astro:middleware";
-// import path from "path";
-// import { routeComponentMap } from "../src/components/ComponentMap";
+import path from "path";
+import { readFile } from "fs/promises";
 
-const cssManifest = {
-  Login: "/_astro/assets/svelte/Login-7c081551.css",
-  Register: "/_astro/assets/svelte/Register-a6faefec.css",
-  "common-Footer": "/_astro/assets/svelte/common-Footer-1c72de2f.css",
-  Hero: "/_astro/assets/svelte/Hero-7ef988ef.css",
-  Header: "/_astro/assets/svelte/Header-844c0186.css",
-  Footer: "/_astro/assets/svelte/Footer-c5483db2.css",
-};
+const externalCss = true;
+
+const clientPath = path.join(process.cwd(), "dist", "client");
+const cssManifestPath = path.join(clientPath, "css-manifest.json");
+
+let cssManifest: Record<string, string> = {};
+let cssManifestContentCache: Record<string, string> = {};
+
+try {
+  const manifest = await readFile(cssManifestPath, "utf-8");
+  cssManifest = JSON.parse(manifest);
+
+  for (const key of Object.keys(cssManifest)) {
+    console.log("pathh", path.join(clientPath, cssManifest[key]));
+    const css = await readFile(
+      path.join(clientPath, cssManifest[key]),
+      "utf-8"
+    );
+
+    console.log({ css });
+    cssManifestContentCache[key] = css;
+  }
+
+  console.log({ cssManifestContentCache });
+  console.log("CSS Manifest:", cssManifest);
+} catch (error) {
+  console.error("Failed to read CSS manifest:", error);
+}
 
 export const cssInjector = defineMiddleware(async (context, next) => {
   console.log("[css-injector] Middleware triggered for:", context.url.pathname);
@@ -20,6 +40,10 @@ export const cssInjector = defineMiddleware(async (context, next) => {
   );
 
   const response = await next();
+
+  if (!isProd) {
+    return response;
+  }
 
   console.log("locals", context.locals);
   console.log("userd", context.locals?.usedComponents || "no used components");
@@ -35,25 +59,52 @@ export const cssInjector = defineMiddleware(async (context, next) => {
     usedComponents
   );
 
-  // Map to CSS files from manifest
-  const cssFiles = usedComponents
-    .map((component) => cssManifest[component])
-    .filter(Boolean);
-  console.log("[css-injector] CSS files to inject:", cssFiles);
-
-  // Store in locals for potential use elsewhere
-  context.locals.cssFiles = cssFiles;
+  let cssList = [];
+  context.locals.isCssExternal = externalCss;
+  if (externalCss) {
+    // Map to CSS files from manifest
+    cssList = usedComponents
+      .map((component: string) => cssManifest[component])
+      .filter(Boolean);
+    console.log("[css-injector] CSS links inject:", cssList);
+  } else {
+    // Map to CSS files from Cache
+    cssList = usedComponents
+      .map((component: string) => cssManifestContentCache[component])
+      .filter(Boolean);
+    console.log("[css-injector] CSS embed inject:", cssList);
+  }
+  context.locals.cssList = cssList;
 
   // Get the response from the next middleware/page
 
   // Modify the HTML response
   const html = await response.text();
+  // if (html.includes("</head>")) {
+  //   const cssLinks = cssFiles
+  //     .map((cssFile) => `<link rel="stylesheet" href="${cssFile}">`)
+  //     .join("\n");
+  //   console.log("[css-injector] Injecting CSS links:", cssLinks);
+  //   const modifiedHtml = html.replace("</head>", `${cssLinks}</head>`);
+  //   return new Response(modifiedHtml, {
+  //     status: response.status,
+  //     headers: response.headers,
+  //   });
+  // }
+
   if (html.includes("</head>")) {
-    const cssLinks = cssFiles
-      .map((cssFile) => `<link rel="stylesheet" href="${cssFile}">`)
-      .join("\n");
-    console.log("[css-injector] Injecting CSS links:", cssLinks);
-    const modifiedHtml = html.replace("</head>", `${cssLinks}</head>`);
+    let cssContent = "";
+    if (externalCss) {
+      cssContent = cssList
+        .map((cssFile: string) => `<link rel="stylesheet" href="${cssFile}">`)
+        .join("\n");
+    } else {
+      cssContent = `<style>${cssList
+        .map((cssStyle: string) => cssStyle)
+        .join("\n")}</style>`;
+    }
+    console.log("[css-injector] Injecting CSS:", cssContent);
+    const modifiedHtml = html.replace("</head>", `${cssContent}</head>`);
     return new Response(modifiedHtml, {
       status: response.status,
       headers: response.headers,
