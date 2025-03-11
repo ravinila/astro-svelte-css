@@ -5,8 +5,7 @@ import Layout from "../layouts/Layout.astro";
 // Get the dynamic route parameter (e.g., "Header", "Footer", "Hero")
 const { page } = Astro.params;
 
-/* @ts-ignore */
-Astro.locals.usedComponents = ["Header", "Hero"];
+Astro.locals.usedComponents = ["Header", "Hero", "Footer"];
 
 console.log({ param: page });
 

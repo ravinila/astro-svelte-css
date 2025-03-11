@@ -1,12 +1,8 @@
-import { defineConfig } from "astro/config";
-import svelte from "@astrojs/svelte";
-import node from "@astrojs/node";
-import { compile } from "svelte/compiler";
-import path from "path";
-import fs from "fs/promises";
 import { createHash } from "crypto";
+import fs from "fs/promises";
+import path from "path";
 
-function extractSvelteCSS() {
+export function extractSvelteCSS() {
   const cssMap = new Map();
   return {
     name: "extract-svelte-css",
@@ -44,9 +40,7 @@ function extractSvelteCSS() {
   };
 }
 
-export const svelteCSSPreprocess = extractSvelteCSS();
-
-function svelteCSSFinalizer() {
+export function svelteCSSFinalizer() {
   return {
     name: "svelte-css-finalizer",
     hooks: {
@@ -102,31 +96,3 @@ function svelteCSSFinalizer() {
     },
   };
 }
-
-export default defineConfig({
-  integrations: [
-    svelte({
-      preprocess: [svelteCSSPreprocess],
-    }),
-    svelteCSSFinalizer(),
-  ],
-  vite: {
-    build: {
-      cssCodeSplit: true,
-      rollupOptions: {
-        output: {
-          assetFileNames: "assets/[name]-[hash][extname]",
-        },
-      },
-    },
-    css: {
-      extract: false,
-    },
-    ssr: {
-      noExternal: ["svelte"],
-    },
-  },
-  output: "server",
-  server: { port: 5000 },
-  adapter: node({ mode: "middleware" }),
-});

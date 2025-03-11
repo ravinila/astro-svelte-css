@@ -15,7 +15,6 @@ try {
   cssManifest = JSON.parse(manifest);
 
   for (const key of Object.keys(cssManifest)) {
-    console.log("pathh", path.join(clientPath, cssManifest[key]));
     const css = await readFile(
       path.join(clientPath, cssManifest[key]),
       "utf-8"
@@ -44,9 +43,6 @@ export const cssInjector = defineMiddleware(async (context, next) => {
   if (!isProd) {
     return response;
   }
-
-  console.log("locals", context.locals);
-  console.log("userd", context.locals?.usedComponents || "no used components");
 
   // Get components used for this route
   const pathname = context.url.pathname;
