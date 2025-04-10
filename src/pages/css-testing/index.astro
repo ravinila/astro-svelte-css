@@ -1,0 +1,26 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import Footer from "../../components/Footer.svelte";
+import Hero from "../../components/Hero.svelte";
+import { componentTracker } from "../../utils";
+import { componentMap } from "../../components/componentMap";
+
+const { page } = Astro.params;
+
+const Component = componentMap["Header"];
+
+if (!Component) {
+    return new Response(`Component "${page}" not found`, { status: 404 });
+}
+
+componentTracker.clear();
+Astro.locals.usedComponents = ["Header"];
+---
+
+<Layout>
+    <div class="container">
+        <Component />
+        <Hero />
+        <Footer />
+    </div>
+</Layout>

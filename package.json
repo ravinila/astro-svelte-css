@@ -11,6 +11,11 @@
   "dependencies": {
     "@astrojs/node": "^9.1.0",
     "@astrojs/svelte": "^7.0.4",
-    "astro": "^5.3.0"
+    "astro": "^5.3.0",
+    "astro-compressor": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.17",
+    "svelte-preprocess": "^6.0.3"
   }
 }
